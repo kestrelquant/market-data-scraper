@@ -1,11 +1,27 @@
 # market-data-scraper
 
-A generic REST API poller: exponential backoff with jitter on 429/5xx,
-pluggable data sources, and a choice of CSV or SQLite sink. The shipped
-source hits CoinGecko's public, no-auth `simple/price` endpoint — add a
-module under `sources/` for anything else that fits the same shape.
+A generic REST API poller with exponential backoff, pluggable data
+sources, and a choice of CSV or SQLite output.
 
-## Structure
+## Problem
+
+Polling a rate-limited API on an interval sounds trivial until an outage
+hits: no backoff means hammering a struggling endpoint with the exact
+same request every few seconds, and no jitter means a fleet of pollers
+all retrying in lockstep. Most one-off scraper scripts skip this
+entirely because it's not the interesting part of the task — until the
+data source has a bad day and the script either floods it or silently
+stops producing rows.
+
+## Solution
+
+The backoff and storage logic (`backoff.py`, `sinks/`) know nothing
+about any specific API — they operate on a plain `fetch_fn() -> list[dict]`
+callable. The shipped source (`sources/coingecko.py`) hits CoinGecko's
+public, no-auth `simple/price` endpoint as a working reference; pointing
+this at a different API is a new file under `sources/`, not a rewrite.
+
+## Architecture
 
 ```
 market_data_scraper/
@@ -19,13 +35,13 @@ market_data_scraper/
   __main__.py            python -m market_data_scraper
 ```
 
-## Why the backoff/sink logic is separated from the data source
+## Installation
 
-The part that's actually reusable across projects isn't "how to call
-CoinGecko" — it's "how to poll something on an interval without hammering
-it during an outage, and where to put the rows once you have them."
-`with_backoff` and the two sinks don't import anything from `sources/`,
-and adding a new source never touches them.
+```bash
+git clone https://github.com/kestrelquant/market-data-scraper
+cd market-data-scraper
+pip install -r requirements.txt
+```
 
 ## Usage
 
@@ -50,13 +66,13 @@ to write to SQLite instead.
 
 On a 429 or 5xx, the delay starts at `base_delay` and doubles each retry
 up to `max_delay`, with `jitter` randomizing each sleep so multiple
-instances don't retry in lockstep. Gives up after `max_retries` and
-raises.
+instances don't retry in lockstep. Gives up and raises after
+`max_retries`.
 
 ## Tests
 
-All tests mock the HTTP layer — no network calls, no real API rate limits
-touched by CI.
+All tests mock the HTTP layer — no network calls, no real API rate
+limits touched by CI.
 
 ```bash
 pip install -r requirements.txt pytest
