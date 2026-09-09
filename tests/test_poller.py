@@ -7,14 +7,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from poller import (
-    BackoffConfig,
-    CsvSink,
-    RetryableError,
-    SqliteSink,
-    fetch_coingecko_simple_price,
-    with_backoff,
-)
+from market_data_scraper import BackoffConfig, CsvSink, RetryableError, SqliteSink, with_backoff
+from market_data_scraper.sources.coingecko import fetch_coingecko_simple_price
 
 
 def test_with_backoff_retries_then_succeeds(monkeypatch):
@@ -44,7 +38,7 @@ def test_with_backoff_gives_up_after_max_retries(monkeypatch):
 
 def test_fetch_coingecko_raises_retryable_on_429():
     fake_resp = MagicMock(status_code=429)
-    with patch("poller.requests.get", return_value=fake_resp):
+    with patch("market_data_scraper.sources.coingecko.requests.get", return_value=fake_resp):
         with pytest.raises(RetryableError):
             fetch_coingecko_simple_price(["bitcoin"])
 
@@ -53,7 +47,7 @@ def test_fetch_coingecko_parses_response():
     fake_resp = MagicMock(status_code=200)
     fake_resp.json.return_value = {"bitcoin": {"usd": 65000.0}}
     fake_resp.raise_for_status.return_value = None
-    with patch("poller.requests.get", return_value=fake_resp):
+    with patch("market_data_scraper.sources.coingecko.requests.get", return_value=fake_resp):
         rows = fetch_coingecko_simple_price(["bitcoin"])
     assert rows[0]["asset"] == "bitcoin"
     assert rows[0]["price"] == 65000.0

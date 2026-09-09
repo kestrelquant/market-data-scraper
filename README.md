@@ -1,22 +1,42 @@
 # market-data-scraper
 
 A generic REST API poller: exponential backoff with jitter on 429/5xx,
-pluggable fetch function, and a choice of CSV or SQLite sink. The example
-fetch function hits CoinGecko's public, no-auth `simple/price` endpoint —
-swap it for any REST source that returns rows.
+pluggable data sources, and a choice of CSV or SQLite sink. The shipped
+source hits CoinGecko's public, no-auth `simple/price` endpoint — add a
+module under `sources/` for anything else that fits the same shape.
+
+## Structure
+
+```
+market_data_scraper/
+  backoff.py           BackoffConfig, RetryableError, with_backoff -- no source/sink knowledge
+  poller.py             poll_forever(fetch_fn, sink, interval, backoff)
+  sources/
+    coingecko.py         fetch_coingecko_simple_price -- one example source
+  sinks/
+    csv_sink.py           CsvSink
+    sqlite_sink.py         SqliteSink
+  __main__.py            python -m market_data_scraper
+```
 
 ## Why the backoff/sink logic is separated from the data source
 
 The part that's actually reusable across projects isn't "how to call
 CoinGecko" — it's "how to poll something on an interval without hammering
 it during an outage, and where to put the rows once you have them."
-`with_backoff` and the two sinks don't know or care what `fetch_fn`
-talks to.
+`with_backoff` and the two sinks don't import anything from `sources/`,
+and adding a new source never touches them.
 
 ## Usage
 
+```bash
+python -m market_data_scraper
+```
+
+or as a library:
+
 ```python
-from poller import fetch_coingecko_simple_price, CsvSink, BackoffConfig, poll_forever
+from market_data_scraper import fetch_coingecko_simple_price, CsvSink, BackoffConfig, poll_forever
 
 sink = CsvSink("prices.csv", fieldnames=["timestamp", "asset", "price"])
 fetch = lambda: fetch_coingecko_simple_price(["bitcoin", "ethereum"])
